@@ -41,6 +41,17 @@ MODBUS_BEGIN_DECLS
 #define _RESPONSE_TIMEOUT 500000
 #define _BYTE_TIMEOUT     500000
 
+/* LOCAL PATCH: upstream issue #863. Socket handles are rejected
+ * when >= FD_SETSIZE, a limit of the POSIX fd_set bitmap. On Win32 fd_set is a
+ * list of up to FD_SETSIZE (64) handles and socket handles are arbitrary
+ * values (usually > 64), so that check made Modbus-TCP connect and receive
+ * fail with EINVAL. Keep the limit only where it applies. */
+#ifdef _WIN32
+#define LM_SOCKET_FD_LIMIT 0x7FFFFFFF
+#else
+#define LM_SOCKET_FD_LIMIT FD_SETSIZE
+#endif
+
 typedef enum {
     _MODBUS_BACKEND_TYPE_RTU = 0,
     _MODBUS_BACKEND_TYPE_TCP

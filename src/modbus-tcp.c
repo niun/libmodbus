@@ -305,7 +305,7 @@ static int _connect(int sockfd,
 
         /* Wait to be available in writing */
         FD_ZERO(&wset);
-        if (sockfd >= FD_SETSIZE) {
+        if (sockfd >= LM_SOCKET_FD_LIMIT) {
             errno = EINVAL;
             return -1;
         }
@@ -363,7 +363,7 @@ static int _modbus_tcp_connect(modbus_t *ctx)
         return -1;
     }
 
-    if (s >= FD_SETSIZE) {
+    if (s >= LM_SOCKET_FD_LIMIT) {
         if (ctx->debug) {
             fprintf(
                 stderr,
@@ -471,7 +471,7 @@ static int _modbus_tcp_pi_connect(modbus_t *ctx)
         if (s < 0)
             continue;
 
-        if (s >= FD_SETSIZE) {
+        if (s >= LM_SOCKET_FD_LIMIT) {
             if (ctx->debug) {
                 fprintf(
                     stderr,
@@ -550,7 +550,7 @@ static int _modbus_tcp_flush(modbus_t *ctx)
         tv.tv_sec = 0;
         tv.tv_usec = 0;
         FD_ZERO(&rset);
-        if (ctx->s < 0 || ctx->s >= FD_SETSIZE) {
+        if (ctx->s < 0 || ctx->s >= LM_SOCKET_FD_LIMIT) {
             errno = EINVAL;
             return -1;
         }
@@ -805,7 +805,7 @@ int modbus_tcp_accept(modbus_t *ctx, int *s)
         return -1;
     }
 
-    if (ctx->s >= FD_SETSIZE) {
+    if (ctx->s >= LM_SOCKET_FD_LIMIT) {
         if (ctx->debug) {
             fprintf(
                 stderr,
@@ -853,7 +853,7 @@ int modbus_tcp_pi_accept(modbus_t *ctx, int *s)
         return -1;
     }
 
-    if (ctx->s >= FD_SETSIZE) {
+    if (ctx->s >= LM_SOCKET_FD_LIMIT) {
         if (ctx->debug) {
             fprintf(
                 stderr,
@@ -890,7 +890,7 @@ _modbus_tcp_select(modbus_t *ctx, fd_set *rset, struct timeval *tv, int length_t
             }
             /* Necessary after an error */
             FD_ZERO(rset);
-            if (ctx->s < 0 || ctx->s >= FD_SETSIZE) {
+            if (ctx->s < 0 || ctx->s >= LM_SOCKET_FD_LIMIT) {
                 errno = EINVAL;
                 return -1;
             }
