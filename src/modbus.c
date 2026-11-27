@@ -362,6 +362,35 @@ compute_data_length_after_meta(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
    - read() or recv() error codes
 */
 
+/* LOCAL PATCH: upstream issue #843. With the byte timeout disabled the
+ * complete confirmation must arrive within the response timeout. POSIX
+ * select() decrements its timeval, Winsock select() and win32_ser_select() do
+ * not, so the receive loop computes the remaining time explicitly. */
+static int64_t lm_monotonic_us(void)
+{
+#ifdef _WIN32
+    LARGE_INTEGER f, c;
+    QueryPerformanceFrequency(&f);
+    QueryPerformanceCounter(&c);
+    return (int64_t) (c.QuadPart / f.QuadPart) * 1000000 +
+           (int64_t) (c.QuadPart % f.QuadPart) * 1000000 / f.QuadPart;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t) ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+#endif
+}
+
+/* LOCAL PATCH: *tv = what is left of 'total' since t0 (>= 0). */
+static void lm_remaining_timeout(const struct timeval *total, int64_t t0, struct timeval *tv)
+{
+    int64_t left = (int64_t) total->tv_sec * 1000000 + total->tv_usec - (lm_monotonic_us() - t0);
+    if (left < 0)
+        left = 0;
+    tv->tv_sec = (long) (left / 1000000);
+    tv->tv_usec = (long) (left % 1000000);
+}
+
 int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 {
     int rc;
@@ -425,6 +454,8 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
         p_tv = &tv;
     }
 
+    /* LOCAL PATCH: start of the response wait (see lm_remaining_timeout) */
+    const int64_t lm_t0 = lm_monotonic_us();
     while (length_to_read != 0) {
         rc = ctx->backend->select(ctx, &rset, p_tv, length_to_read);
         if (rc == -1) {
@@ -535,6 +566,10 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
             tv.tv_sec = ctx->byte_timeout.tv_sec;
             tv.tv_usec = ctx->byte_timeout.tv_usec;
             p_tv = &tv;
+        }
+        else if (length_to_read > 0 && msg_type == MSG_CONFIRMATION) {
+            /* LOCAL PATCH: wait only for the rest of the response timeout */
+            lm_remaining_timeout(&ctx->response_timeout, lm_t0, &tv);
         }
         /* else timeout isn't set again, the full response must be read before
            expiration of response timeout (for CONFIRMATION only) */
