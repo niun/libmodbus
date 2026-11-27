@@ -528,6 +528,15 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         return -1;
     }
 
+    /* LOCAL PATCH: libmodbus 3.1.12 upstream bug on Windows RTU.
+     * _modbus_receive_msg() in modbus.c rejects ctx->s < 0 with "ERROR Invalid
+     * socket descriptor" *before* delegating to the backend's select(). The
+     * Win32 serial backend keeps its real handle in w_ser.fd and never sets
+     * ctx->s, so every RTU read fails with EINVAL. win32_ser_select() ignores
+     * ctx->s, and the Win32 close path never close()s it, so assign a harmless
+     * valid placeholder purely to satisfy that guard. */
+    ctx->s = 1;
+
     return 0;
 }
 #else
